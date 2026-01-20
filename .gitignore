@@ -1,0 +1,6 @@
+.venv*
+
+./stl/*
+
+./config/parameters/dev_flex_parameters.yml
+./out/gcode/sliced_geometry.gcode
