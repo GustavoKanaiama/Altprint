@@ -1,4 +1,4 @@
-from Altprint.core.flex_continuous_copy import FlexProcess, FlexPrint
+from Altprint.core.flex_continuous import FlexProcess, FlexPrint
 
 
 process = FlexProcess(settings_file="config/parameters/dev_flex_parameters.yml")
