@@ -1,11 +1,13 @@
-# Ignore the virtual environment directory
-venv/
+# Python cache
+__pycache__/
+**/__pycache__/
+
+# Virtual environment
 .venv/
+**/.venv/
 
-./stl/*
+# G-code files
+*.gcode
 
-./config/parameters/dev_flex_parameters.yml
-./out/gcode/sliced_geometry.gcode
-
-#Ignore "__pycache__"
-*.pyc
+# YAML files
+*.yml

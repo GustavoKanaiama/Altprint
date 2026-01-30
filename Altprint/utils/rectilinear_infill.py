@@ -1,10 +1,14 @@
-from shapely.geometry import Polygon, MultiLineString
+from shapely.geometry import Polygon, MultiLineString, Point
+from shapely.plotting import plot_line, plot_points, plot_polygon
 from shapely.affinity import translate, rotate
 import numpy as np
 from Altprint.utils.infill import InfillMethod
 from Altprint.utils.layer import Layer
+from matplotlib import pyplot as plt
 
 from Altprint.utils.best_path import *
+
+import networkx as nx
 
 # arquivo define como será feito o tipo/caminho do preenchimento (raster), cada área de cada camada tem suas colunas de preenchimento e de buracos além de definir a estratégia de preenchimento pela rotação e translação de segmentos
 
@@ -40,6 +44,7 @@ def get_column(a, b, gap, height, hole):
     mask[start:end] = 0  # Define os valores da máscara como 0 para os índices dentro da faixa de y, isso indica que essas coordenadas x são válidas e não devem ser mascaradas
     # array mascarado inicializado com zeros, os valores dentro da faixa de y são mantidos, enquanto os valores fora da faixa são mascarados
     col = np.ma.array(np.zeros(height), mask=mask)
+
     col[start:end] = xs
     if dy > 0:  # se o segmento é no sentido positivo
         if not hole:  # se é preenchimento
@@ -62,6 +67,7 @@ def get_column(a, b, gap, height, hole):
 
 
 def get_cols(shape, gap, thres, height, hole):
+
     if not shape.is_ccw:  # Verifica se a forma não está definida no sentido anti-horário
         coords = shape.coords[::-1]  # inverte a ordem das coordenadas
     else:
@@ -85,6 +91,7 @@ def get_cols(shape, gap, thres, height, hole):
             cols.append(col)
             fill.append(fill_col)
             used.append(used_col)
+
     # Retorna arrays mascarados para as colunas, preenchimento e colunas usadas como uma tupla
     return np.ma.array(cols), np.ma.array(fill), np.ma.array(used)
 
@@ -259,11 +266,51 @@ class RectilinearInfill(InfillMethod):
         # ----- Processing BestPath -----
         perimeterBuffer = RawList_Points(layer.flex_print_ref.last_loop, makeTuple=True)
         
+        
+
         buffer_InfillPaths = []
-
-
+        ### ---------------------------------------------------###
+        G = nx.Graph()
+        number_node = 1
+        edges_linestring = []
+        
         for k in multilinestring_infill.geoms:
             buffer_InfillPaths.append(RawList_Points(k, makeTuple=True))
+    
+
+            edges_linestring.append((list(k.coords)[0], list(k.coords)[-1]))
+            G.add_nodes_from(str(number_node))
+
+            number_node += 1
+        
+        #print(edges_linestring)
+        G.add_node("Ref")
+
+        print(G)
+        ref_point = perimeterBuffer[-1]
+        #print(ref_point)
+
+        # Calc ref - edges
+        for i in range(len(edges_linestring)):
+            dist_from_ref = sp.distance(Point(ref_point), Point(edges_linestring[i][0]))
+            G.add_weighted_edges_from([("Ref", str(i+1), round(dist_from_ref, 2))])
+
+        for i in range(len(edges_linestring)):
+
+            for j in range(len(edges_linestring)):
+
+                dist_from_node = sp.distance(sp.Point(edges_linestring[i][0]), sp.Point(edges_linestring[j][0]))
+                G.add_weighted_edges_from([(str(i+1), str(j+1), round(dist_from_node, 2))])
+
+        # 4. Draw and display the graph
+        pos = nx.shell_layout(G) # positions for all nodes
+        nx.draw(G, pos, with_labels=True, node_color='lightblue', node_size=1000, edge_color='gray')
+        edge_labels = nx.get_edge_attributes(G, 'weight')
+        nx.draw_networkx_edge_labels(G, pos,edge_labels=edge_labels)
+
+        plt.title("Simple NetworkX Graph with Weights")
+        plt.show()
+        ### ---------------------------------------------------###
 
         best_path, best_directions, _ = searchParameters_Perimeter2Infill_rotateFlex(
             perimeterBuffer, [buffer_InfillPaths])
