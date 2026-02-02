@@ -1,6 +1,7 @@
 # Python cache
 __pycache__/
 **/__pycache__/
+Altprint/utils/__pycache__/*
 
 # Virtual environment
 .venv/

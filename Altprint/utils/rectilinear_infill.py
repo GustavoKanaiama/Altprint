@@ -267,40 +267,68 @@ class RectilinearInfill(InfillMethod):
         perimeterBuffer = RawList_Points(layer.flex_print_ref.last_loop, makeTuple=True)
         
         
-
         buffer_InfillPaths = []
         ### ---------------------------------------------------###
         G = nx.Graph()
         number_node = 1
-        edges_linestring = []
+        edges_point = []
+        edges_names = []
         
         for k in multilinestring_infill.geoms:
-            buffer_InfillPaths.append(RawList_Points(k, makeTuple=True))
-    
+            raw_list_points = RawList_Points(k, makeTuple=True)
+            buffer_InfillPaths.append(raw_list_points)
 
-            edges_linestring.append((list(k.coords)[0], list(k.coords)[-1]))
-            G.add_nodes_from(str(number_node))
+            for i in range(2):
+                if i == 0:
+                    node_name = str(number_node) + "'"
+                    edges_point.append(raw_list_points[0])
+
+                else:
+                    node_name = str(number_node) + "''"
+                    edges_point.append(raw_list_points[-1])
+
+                edges_names.append(node_name)
 
             number_node += 1
         
-        #print(edges_linestring)
-        G.add_node("Ref")
 
-        print(G)
+        G.add_node("Ref") # Last point perimeter
+
         ref_point = perimeterBuffer[-1]
-        #print(ref_point)
 
-        # Calc ref - edges
-        for i in range(len(edges_linestring)):
-            dist_from_ref = sp.distance(Point(ref_point), Point(edges_linestring[i][0]))
-            G.add_weighted_edges_from([("Ref", str(i+1), round(dist_from_ref, 2))])
+        # Calc weight edge from (ref - nodes)
 
-        for i in range(len(edges_linestring)):
+        for i in range(len(edges_point)):
+            dist_from_ref = sp.distance(Point(ref_point), Point(edges_point[i]))
 
-            for j in range(len(edges_linestring)):
+            G.add_weighted_edges_from([("Ref", edges_names[i], round(dist_from_ref, 2))]) #ref - 1', ref- 1'', ref-2', ref-2'', ...
 
-                dist_from_node = sp.distance(sp.Point(edges_linestring[i][0]), sp.Point(edges_linestring[j][0]))
-                G.add_weighted_edges_from([(str(i+1), str(j+1), round(dist_from_node, 2))])
+
+        # Calc edges weight from (node - node)
+        # TODO: optimize this function - dist(A, B) is the same dist(B, A)!
+        for i in range(len(edges_point)):
+
+            for j in range(len(edges_point)):
+                
+                split_name_i = edges_names[i].split("'")
+                split_name_j = edges_names[j].split("'")
+
+                if (split_name_i[0] == split_name_j[0]) and (len(split_name_i) != len(split_name_j)): # e.g. 1' - 1'', or 2'' - 2'
+
+                    dist_node = 0
+                    G.add_weighted_edges_from([(edges_names[i], edges_names[j], round(dist_node, 2))])
+                    G.add_weighted_edges_from([(edges_names[j], edges_names[i], round(dist_node, 2))])
+
+
+                elif (split_name_i[0] == split_name_j[0]) and (len(split_name_i) == len(split_name_j)): # e.g. 1' - 1', or 2' - 2'
+                    pass
+
+                else:
+                    dist_node = sp.distance(sp.Point(edges_point[i]), sp.Point(edges_point[j])) # e.g. 1' - 2'', 2' - 1'
+
+                    G.add_weighted_edges_from([(edges_names[i], edges_names[j], round(dist_node, 2))])
+                    G.add_weighted_edges_from([(edges_names[j], edges_names[i], round(dist_node, 2))])
+
 
         # 4. Draw and display the graph
         pos = nx.shell_layout(G) # positions for all nodes
