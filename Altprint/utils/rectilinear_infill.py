@@ -253,7 +253,7 @@ class RectilinearInfill(InfillMethod):
 
         return multilinestring_infill
 
-    def generate_continuous_infill(self, layer: Layer, gap, angle) -> MultiLineString:
+    def generate_continuous_infill(self, layer: Layer, gap, angle, best_path_flag, sidewalk, thr_walk_around) -> MultiLineString:
         infill = []  # armazenar os caminhos de preenchimento
         for border in layer.infill_border.geoms:  # Itera através das geometrias da borda de preenchimento da camada
             # para cada borda, gera caminhos de preenchimento reticulado usando a função rectilinear_fill
@@ -269,75 +269,92 @@ class RectilinearInfill(InfillMethod):
         
         buffer_InfillPaths = []
         ### ---------------------------------------------------###
-        G = nx.Graph()
-        number_node = 1
-        edges_point = []
-        edges_names = []
         
-        for k in multilinestring_infill.geoms:
-            raw_list_points = RawList_Points(k, makeTuple=True)
-            buffer_InfillPaths.append(raw_list_points)
+        if best_path_flag:
+            G = nx.Graph()
+            number_node = 1
+            edges_point = []
+            edges_names = []
+            
+            for k in multilinestring_infill.geoms:
+                raw_list_points = RawList_Points(k, makeTuple=True)
+                buffer_InfillPaths.append(raw_list_points)
 
-            for i in range(2):
-                if i == 0:
-                    node_name = str(number_node) + "'"
-                    edges_point.append(raw_list_points[0])
+                for i in range(2):
+                    if i == 0:
+                        node_name = str(number_node) + "'"
+                        edges_point.append(raw_list_points[0])
 
-                else:
-                    node_name = str(number_node) + "''"
-                    edges_point.append(raw_list_points[-1])
+                    else:
+                        node_name = str(number_node) + "''"
+                        edges_point.append(raw_list_points[-1])
 
-                edges_names.append(node_name)
+                    edges_names.append(node_name)
 
-            number_node += 1
-        
+                number_node += 1
+            
 
-        G.add_node("Ref") # Last point perimeter
+            G.add_node("Ref") # Last point perimeter
 
-        ref_point = perimeterBuffer[-1]
+            ref_point = perimeterBuffer[-1]
 
-        # Calc weight edge from (ref - nodes)
+            # Create the mapping (node_name - Point)
+            node_point_map = dict(zip(edges_names, edges_point))
+            node_point_map["Ref"] = ref_point
+            
 
-        for i in range(len(edges_point)):
-            dist_from_ref = sp.distance(Point(ref_point), Point(edges_point[i]))
+            # Calc weight edge from (ref - nodes)
+            for i in range(len(edges_point)):
+                dist_from_ref = sp.distance(Point(ref_point), Point(edges_point[i]))
 
-            G.add_weighted_edges_from([("Ref", edges_names[i], round(dist_from_ref, 2))]) #ref - 1', ref- 1'', ref-2', ref-2'', ...
-
-
-        # Calc edges weight from (node - node)
-        # TODO: optimize this function - dist(A, B) is the same dist(B, A)!
-        for i in range(len(edges_point)):
-
-            for j in range(len(edges_point)):
-                
-                split_name_i = edges_names[i].split("'")
-                split_name_j = edges_names[j].split("'")
-
-                if (split_name_i[0] == split_name_j[0]) and (len(split_name_i) != len(split_name_j)): # e.g. 1' - 1'', or 2'' - 2'
-
-                    dist_node = 0
-                    G.add_weighted_edges_from([(edges_names[i], edges_names[j], round(dist_node, 2))])
-                    G.add_weighted_edges_from([(edges_names[j], edges_names[i], round(dist_node, 2))])
+                G.add_weighted_edges_from([("Ref", edges_names[i], round(dist_from_ref, 2))]) #ref - 1', ref- 1'', ref-2', ref-2'', ...
 
 
-                elif (split_name_i[0] == split_name_j[0]) and (len(split_name_i) == len(split_name_j)): # e.g. 1' - 1', or 2' - 2'
-                    pass
+            # Calc edges weight from (node - node)
+            # TODO: optimize this function - dist(A, B) is the same dist(B, A)!
+            for i in range(len(edges_point)):
 
-                else:
-                    dist_node = sp.distance(sp.Point(edges_point[i]), sp.Point(edges_point[j])) # e.g. 1' - 2'', 2' - 1'
+                for j in range(len(edges_point)):
+                    
+                    split_name_i = edges_names[i].split("'")
+                    split_name_j = edges_names[j].split("'")
 
-                    G.add_weighted_edges_from([(edges_names[i], edges_names[j], round(dist_node, 2))])
-                    G.add_weighted_edges_from([(edges_names[j], edges_names[i], round(dist_node, 2))])
+                    if (split_name_i[0] == split_name_j[0]) and (len(split_name_i) != len(split_name_j)): # e.g. 1' - 1'', or 2'' - 2'
+
+                        dist_node = 0
+                        G.add_weighted_edges_from([(edges_names[i], edges_names[j], round(dist_node, 2))])
+                        G.add_weighted_edges_from([(edges_names[j], edges_names[i], round(dist_node, 2))])
 
 
-        # 4. Draw and display the graph
-        pos = nx.shell_layout(G) # positions for all nodes
-        nx.draw(G, pos, with_labels=True, node_color='lightblue', node_size=1000, edge_color='gray')
-        edge_labels = nx.get_edge_attributes(G, 'weight')
-        nx.draw_networkx_edge_labels(G, pos,edge_labels=edge_labels)
+                    elif (split_name_i[0] == split_name_j[0]) and (len(split_name_i) == len(split_name_j)): # e.g. 1' - 1', or 2' - 2'
+                        pass
 
-        plt.title("Simple NetworkX Graph with Weights")
-        plt.show()
+                    else:
+                        dist_node = sp.distance(sp.Point(edges_point[i]), sp.Point(edges_point[j])) # e.g. 1' - 2'', 2' - 1'
+
+                        G.add_weighted_edges_from([(edges_names[i], edges_names[j], round(dist_node, 2))])
+                        G.add_weighted_edges_from([(edges_names[j], edges_names[i], round(dist_node, 2))])
+
+
+            # 4. Draw and display the graph
+            #pos = nx.shell_layout(G) # positions for all nodes
+            #nx.draw(G, pos, with_labels=True, node_color='lightblue', node_size=1000, edge_color='gray')
+            #edge_labels = nx.get_edge_attributes(G, 'weight')
+            #nx.draw_networkx_edge_labels(G, pos,edge_labels=edge_labels)
+            #plt.title("Simple NetworkX Graph with Weights")
+            #plt.show()
+
+
+            cost, path_nodes = min_hamiltonian_path(G, source="Ref")
+
+            #print("Minimum cost: ", cost)
+            #print("Path: ", path_nodes)
+
+        else:
+            for k in multilinestring_infill.geoms:
+                raw_list_points = RawList_Points(k, makeTuple=True)
+                buffer_InfillPaths.append(raw_list_points)
+
         ### ---------------------------------------------------###
 
         best_path, best_directions, _ = searchParameters_Perimeter2Infill_rotateFlex(
@@ -346,6 +363,49 @@ class RectilinearInfill(InfillMethod):
         multilinestring_bufferInfill = MultiLineString(buffer_InfillPaths)
 
         infill_paths = order_list(multilinestring_bufferInfill, best_path, best_directions)
+
+        
+        # Re-ordering using Graph info
+        # TODO: embedded "reoder_by_graph" function in "order_list" and delete the rotateFlex from search paramaeters (clen up some code)
+        # TODO: alocate the first two infills trajectories. then compare the first point of "Ref" to (maybe) use one of the pre-calculated infill paths.
+        
+        if best_path_flag:
+            infill_paths = reorder_by_graph(infill_paths, path_nodes, node_point_map)
+
+        else:
+            # TODO: Create pairs node list not using graph
+            pass
+
+        pair_nodes_path = make_pairs(path_nodes)
+
+        # Mask of walk_around. [0, 0, 0, 1, 0] for each "1" means to apply the walk_around in the corresponded pair_node
+        # (e. g. [(1'', 2'), (2'', 3''), (3', 1')] and the mask -> [0, 1, 0] measn to apply only to (2', 3'') displacement)
+        mask_walk_around = []
+
+        for pair in pair_nodes_path:
+
+            # Search for the pair_node weight (displacement)
+            for edg in G.edges(data=True):
+
+                if (pair == (edg[0], edg[1])) or (pair == (edg[1], edg[0])):
+                    
+                    weight = edg[-1]["weight"]
+                    # print("Weight: ", weight)
+
+                    # Check the threshold and apply to the mask
+                    if (weight > thr_walk_around):
+                        mask_walk_around.append(1)
+                    else:
+                        mask_walk_around.append(0)
+
+        # If there's somethign to walk_around -> generate the walk_around according to the mask (if there's at least one '1' in the list)
+        # and apply to the layer's attribute
+
+        if 1 in mask_walk_around:
+            
+            layer.mask_walk_around = mask_walk_around
+            layer.continuous_infill_w_sidewalk, layer.mask_infill_with_waa = generate_walk_around(infill_paths, sidewalk, mask_walk_around)
+
 
         # ----- END OF Processing BestPath -----
 

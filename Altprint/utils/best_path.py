@@ -1,11 +1,10 @@
-from itertools import permutations
+from itertools import permutations, combinations, product
 # from shapely import wkt
 from shapely.geometry import LineString, Point
 # from shapely.ops import nearest_points  # Correção na importação
 # from itertools import permutations, product
-
 import shapely as sp
-
+import sys
 # faz a dist ponto a ponto do point com a rawlist_points (coord mais prox da lista do point)
 
 
@@ -79,22 +78,25 @@ def perimeterPath_byPoint(startPoint, rawList_perimeterPoints, clockwise=True):
 
     bestPath = []
 
+    # It needs to be that type of slice because of the existence of the 'skirt' in front of the 'perimeter' coords list.
+
+    startIndex1 = rawList_perimeterPoints.index(list(startPoint.coords)[0])
+    firstHalf = rawList_perimeterPoints[startIndex1:]
+
+    # startIndex2 = rawList_perimeterPoints.index(firstHalf[-1])
+    # secondHalf = rawList_perimeterPoints[startIndex2+1:startIndex1+1]
+
+    # aqui nao seira melhor só:
+    secondHalf = rawList_perimeterPoints[:startIndex1+1]
+
+    # o intuito dessa segunda lista é pegar do começo da lista original até o indice que contém a coordenada mais próxima (definida na primeira lista)
+
+
     if clockwise == True:
-
-        # It needs to be that type of slice because of the existence of the 'skirt' in front of the 'perimeter' coords list.
-
-        startIndex1 = rawList_perimeterPoints.index(list(startPoint.coords)[0])
-        firstHalf = rawList_perimeterPoints[startIndex1:]
-
-        # startIndex2 = rawList_perimeterPoints.index(firstHalf[-1])
-        # secondHalf = rawList_perimeterPoints[startIndex2+1:startIndex1+1]
-
-        # aqui nao seira melhor só:
-        secondHalf = rawList_perimeterPoints[:startIndex1+1]
-
-        # o intuito dessa segunda lista é pegar do começo da lista original até o indice que contém a coordenada mais próxima (definida na primeira lista)
-
         bestPath = firstHalf + secondHalf
+    else:
+        bestPath = secondHalf + firstHalf
+
 
     return bestPath
 
@@ -251,6 +253,85 @@ def conc_LoopLinestrings(listLinestrings):
                     Flag_first_point = True
 
     return conc_linestrings
+
+def min_hamiltonian_path(G, source):
+    nodes = list(G.nodes())
+    n = len(nodes)
+    index = {node: i for i, node in enumerate(nodes)}
+    node_from_index = {i: node for node, i in index.items()}
+    
+    dp = {}
+    parent = {}
+    
+    # Base case
+    start_mask = 1 << index[source]
+    dp[(start_mask, source)] = 0
+    
+    # Build DP
+    for size in range(2, n + 1):
+        for subset in combinations(nodes, size):
+            if source not in subset:
+                continue
+            
+            mask = 0
+            for node in subset:
+                mask |= 1 << index[node]
+            
+            for v in subset:
+                if v == source:
+                    continue
+                
+                prev_mask = mask ^ (1 << index[v])
+                best_cost = float("inf")
+                best_prev = None
+                
+                for u in subset:
+                    if u == v:
+                        continue
+                    
+                    if (prev_mask, u) in dp and G.has_edge(u, v):
+                        weight = G[u][v].get('weight', 1)
+                        cost = dp[(prev_mask, u)] + weight
+                        
+                        if cost < best_cost:
+                            best_cost = cost
+                            best_prev = u
+                
+                if best_prev is not None:
+                    dp[(mask, v)] = best_cost
+                    parent[(mask, v)] = best_prev
+    
+    # Final mask (all nodes visited)
+    full_mask = (1 << n) - 1
+    best_cost = float("inf")
+    best_end = None
+    
+    for node in nodes:
+        if node == source:
+            continue
+        if (full_mask, node) in dp:
+            if dp[(full_mask, node)] < best_cost:
+                best_cost = dp[(full_mask, node)]
+                best_end = node
+    
+    if best_end is None:
+        return None, None  # No Hamiltonian path exists
+    
+    # Reconstruct path
+    path = []
+    mask = full_mask
+    current = best_end
+    
+    while current != source:
+        path.append(current)
+        prev = parent[(mask, current)]
+        mask ^= 1 << index[current]
+        current = prev
+    
+    path.append(source)
+    path.reverse()
+    
+    return best_cost, path
 
 
 def searchAndSplit(raw_lists, raw_point):
@@ -535,3 +616,168 @@ def searchParameters_Perimeter2Infill_rotateFlex(listPerimeter, Angle_n_listsInf
         best_directions = tuple([best_directions])
 
     return best_path, best_directions, best_angle
+
+
+def reorder_by_graph(infill_path, node_path, node_point_map):
+
+    result_infill_path = []
+
+    """
+    infill_path: Multilinestring type, each linestring is a part of infill layer.
+    node_path: list type, each element is refered to start-end point of a infill part (e.g. [Ref, 1'', 1'] : 1'': is a starting point of a linestring in infill, and 1' is the ending point of this same linestring)
+    node_point_map: dict type, each 'key' is a Node rfom the graph and each 'value' is the point referent by the 'key'.
+
+    result_infill_path: multilinestring type, reodered infill_path by node_path info.
+    """
+    # Pop the 'Ref'
+    node_path.pop(0)
+
+    # Process node_path = [2'', 2', 3'', 3', 5'', 5'] to [2'', 3'', 5'']
+    node_path = [node_path[x] for x in range(len(node_path)) if x%2 == 0]
+
+    # Iterate over node_path
+    for node in node_path:
+
+        # Pick the point refered by the node
+        node_point = node_point_map[node]
+
+        # Iterate over the infill_path list to search the linestring
+        for linestring in infill_path.geoms:
+
+            # Check if it's the first
+            if (node_point == linestring.coords[0]):
+                
+                # Insert in the result_infill_path
+                result_infill_path.append(linestring)
+
+            # Check if it's the last point
+            if (node_point == linestring.coords[-1]):
+
+                # Reverse the linestring and insert in result_infill_path
+                result_infill_path.append(sp.reverse(linestring))
+
+
+    result_infill_path = sp.MultiLineString(result_infill_path)
+
+    return result_infill_path
+
+def trace_minimum_cost_route(PointStart, PointEnd, ref_route):
+    """
+    Generate a Linestring of the minimum cost route between pointA and pointB using ref_out as reference.
+    PointStart: Point obj, it's the start of the generated route.
+    PointEnd: Point obj, it's the the end of the generated route.
+
+    ref_route: a linestring obj, will be a collection of points that will be used to construct the trajectory. 
+    """
+    
+    # Casting ref_rout Linestring obj -> list
+    ref_route = list(ref_route.coords)
+    
+    idxA = ref_route.index(list(PointStart.coords)[0])
+    idxB = ref_route.index(list(PointEnd.coords)[0])
+
+    # Generate the first possible route: pointStart -> PointEnd (direct)
+    if (idxA == idxB):
+        path_A = PointStart
+
+    elif (idxA < idxB):
+        path_A = ref_route[idxA:idxB+1]
+
+    # In this case we need to reverse the route because the indexA is "in front of" indexB (hence, creating a direct path A->B)
+    elif (idxA > idxB):
+        path_A = ref_route[idxB:idxA+1][::-1]
+
+
+    # Calculate the total dist for the path_A
+    DistClockwise = sp.LineString(path_A).length
+
+    # Calculate the other possible route: pointStart -> start_of_ref -> end_of_ref -> pointEnd
+    firstHalf = ref_route[:idxA+1]
+    secondHalf = ref_route[idxB:]
+
+    path_B = firstHalf[::-1] + secondHalf[::-1]
+
+    # Calculate the total dist for the path_B
+    DistCounterclockwise = sp.LineString(path_B).length
+
+    # Choose the minimum cost
+    if (DistClockwise <= DistCounterclockwise):
+        return sp.LineString(path_A)
+    else:
+        return sp.LineString(path_B)
+
+def walk_around(pair_points, sidewalk, external):
+    """
+    This algorithm aims to change the route of of the nozzle making the same walk through the "sidewalk" usually the external skit linestring or perimeter.
+    The goal is to eliminate the bridges that may appear crossing the flex region.
+
+    infill_path: Usually this algorith tooks place on the infill part. So it's a Multilinestring infill_path variable
+    sidewalk: a linestring used to assist the displacement between the two points on the infill. So the displacement will took place on the sidewalk.
+    mask: a mask (list) that will apply the walk_around only when it's '1'. e.g. [1, 0, 0, 1] only will apply the algorith on the first and the last nozzle (infill) displacement
+    external: if True -> The algorith will use as sidewalk the external linestring of the multilinestring provided. (e.g. external skirt, or external perimeter.)
+    
+    pair_points -> pair of points [(142, 91), (199, 93)] that will be a change of route by using the sidewalk instead of one direct movement.
+    """
+
+    if external:
+        sidewalk = sidewalk.geoms[0]
+    else:
+        sidewalk = sidewalk.geoms[-1]
+   
+    # Pick the closest sidewalk points of pair points
+    pointA = pair_points[0]
+    pointB = pair_points[1]
+
+    closest_pStart_sidewalk = closestPoint(pointA, RawList_Points(sidewalk, makeTuple=True))
+    closest_pEnd_sidewalk = closestPoint(pointB, RawList_Points(sidewalk, makeTuple=True))
+
+    # Generate the trajectory by the two points pA,pB using the sidewalk linestring
+    walk_around_route = trace_minimum_cost_route(closest_pStart_sidewalk, closest_pEnd_sidewalk, sidewalk)
+
+
+    return walk_around_route
+
+def generate_walk_around(infill_path, sidewalk, mask, external=True):
+    """
+    This code generate the list of linestrings referred to walk_around. Also returns a mask_infill_w_waa list of 0's and 1's
+    """
+
+    result_infill_path = []
+    mask_infill_w_waa = [] # Create a mask_infill_w_waa -> list that shows which of the infill's linestring is a waa(walk_around_algorithm) displacement
+
+    for n in range(len(list(infill_path.geoms))-1):
+
+        result_infill_path.append(sp.LineString(infill_path.geoms[n]))
+        mask_infill_w_waa.append(0)
+
+        # Apply the algorith (apply the connection between the two linestrings using the sidewalk)
+        if mask[n] == 1:
+            pair_points = [(infill_path.geoms[n].coords[-1]), (infill_path.geoms[n+1].coords[0])]
+            result_walk_around = walk_around(pair_points, sidewalk, external)
+
+            result_infill_path.append(result_walk_around)
+            mask_infill_w_waa.append(1)
+
+    result_infill_path.append(sp.LineString(infill_path.geoms[-1]))
+    mask_infill_w_waa.append(0)
+
+    return result_infill_path, mask_infill_w_waa
+
+
+def make_pairs(path_node):
+    """
+    Generate displacement pairs using the node_path. return a list of tuples
+    arrange by pairs [2'', 2', 1'', 1', 3'', 3'] -> [(2', 1''), (1', 3'')] OBS: each element is one displacement
+    """
+
+    result_pairs = []
+
+    for i in range(len(path_node)-1):
+
+        # Ignore the first one, and dont be 1''-1', or 4'-4''
+        if (i != 0) and (path_node[i].split("'")[0] != path_node[i+1].split("'")[0]):
+
+            result_pairs.append((path_node[i], path_node[i+1]))
+
+    return result_pairs
+

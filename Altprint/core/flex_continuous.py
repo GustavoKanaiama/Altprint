@@ -9,6 +9,8 @@ from Altprint.utils.lineutil import split_by_regions, retract
 from Altprint.utils.settingsparser import SettingsParser
 
 from Altprint.utils.horizontal_gaps import create_gaps
+import shapely as sp
+import sys
 
 # from Altprint.best_path import *
 
@@ -51,6 +53,8 @@ class FlexProcess():  # definição da classe responsável por controlar os par�
             "orientation_gap": False,
             "best_path": True,
             "verbose": True,
+            "threshold_walk_around": 300,
+            "apply_walk_around": False,
         }
         # loop que percorre todos os itens do dicionário "prop_defaults". Para cada item, ele usa a função "setattr" para definir um atributo na instância atual com o nome "prop" e o valor correspondente de kwargs se ele existir, caso contrário, ele usa o valor padrão default.
         for (prop, default) in prop_defaults.items():
@@ -189,33 +193,48 @@ class FlexPrint(BasePrint):  # definição da classe responsável por implementa
                             Raster(path, self.process.flow, self.process.speed))
 
             # ------ COMEÇO DO PRE-PROCESSAMENTO DO INFILL_PATH -------
-            if self.process.best_path:  # Caso best_path esteja abilitado no .yml
                 # Calcula o melhor caminho do preenchimento (perímetro para o preenchimento)
 
-                # ***-------------- DEGUB --------------***
-                if i == 0:
-                # ***-------------- DEGUB --------------***
-                    infill_paths = infill_method.generate_continuous_infill(layer,
-                                                                            self.process.raster_gap,
-                                                                            self.process.infill_angle[0])
+            infill_paths = infill_method.generate_continuous_infill(layer,
+                                                                    self.process.raster_gap,
+                                                                    self.process.infill_angle[0],
+                                                                    self.process.best_path,
+                                                                    layer.perimeter_paths,
+                                                                    self.process.threshold_walk_around
+                                                                    )
+                
+            # try to generate the infill region by using the internal perimeter
+            internal_perim_linestring = layer.perimeter_paths.geoms[-1]
+            merged_line = sp.line_merge(internal_perim_linestring)
 
-            else:
-                infill_paths = infill_method.generate_infill(layer,
-                                                             self.process.raster_gap,
-                                                             self.process.infill_angle[0])
+            try:
+                # Create a Polygon from the merged, closed line
+                infill_region = sp.Polygon(merged_line.coords)
+            except:
+                print("The perimeter does not form a closed loop; cannot create the infill_region.")
+                sys.exit(0)
+                quit
 
-            infill_paths = split_by_regions(infill_paths, flex_regions)
+            # infill_region is only used by walk_around algorithm
+            infill_paths = split_by_regions(infill_paths, flex_regions, infill_region, layer, self.process.apply_walk_around) 
+
             # ------ FIM DO PRE-PROCESSAMENTO DO INFILL_PATH -------
-            for path in infill_paths.geoms:
+            for index, path in enumerate(infill_paths.geoms, start=0):
                 flex_path = False
+
+                if self.process.apply_walk_around:
+                    mask = layer.mask_sliced_region_walk_around[index] #this result will be '1' or '0'
+                else:
+                    mask = 0
 
                 for region in flex_regions_gapped.geoms:  # para a região flexível
 
                     # se o caminho estiver na região flexivel
                     if path.within(region.buffer(0.01, join_style=2)):
                         flex_path, retract_path = retract(path, self.process.retract_ratio)  # noqa: E501
-                        layer.infill.append(Raster(flex_path, self.process.flex_flow, self.process.flex_speed))  # noqa: E501
-                        layer.infill.append(Raster(retract_path, self.process.retract_flow, self.process.retract_speed))  # noqa: E501
+                        layer.infill.append(Raster(flex_path, self.process.flex_flow, self.process.flex_speed, mask))  # noqa: E501
+                        layer.infill.append(Raster(retract_path, self.process.retract_flow, self.process.retract_speed, mask))  # noqa: E501  
+
                         flex_path = True
                         break
 
@@ -228,16 +247,14 @@ class FlexPrint(BasePrint):  # definição da classe responsável por implementa
                     if i == 0:  # para a primeira camada
                         # adiciona ao preenchimento da primeira camada como deve ser o fluxo e a velocidade do raster
                         layer.infill.append(
-                            Raster(path, self.process.first_layer_flow, self.process.speed))
+                            Raster(path, self.process.first_layer_flow, self.process.speed, mask))
                     else:
                         # adiciona ao preenchimento da camada como deve ser o fluxo e a velocidade do raster
                         layer.infill.append(
-                            Raster(path, self.process.flow, self.process.speed))
+                            Raster(path, self.process.flow, self.process.speed, mask))
 
-            # print("Layer ", i, "\nLast Infill Loop: ", self.last_loop, "\n")
-            # a camada atual é adicionada ao dicionário "layers" com a chave "height" referente a altura desta camada
             self.layers[height] = layer
-
+            
     def export_gcode(self, filename):
         if self.process.verbose is True:  # linha de verificação fornecida dentro das configurações do próprio arquivo yml
             # mensagem quando executa essa função do programa
