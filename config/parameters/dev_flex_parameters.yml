@@ -1,8 +1,8 @@
-model_file: config/stl/Quebra/quebra.stl #arquivo da peça desejada
-flex_model_file: config/stl/Quebra/quebra_flex.stl #arquivo da "peça" que representa a região flexível na peça original
+model_file: config/stl/S_ciclo_henrique/s_ciclo_H.stl #arquivo da peça desejada
+flex_model_file: config/stl/S_ciclo_henrique/s_ciclo_H_flex.stl #arquivo da "peça" que representa a região flexível na peça original
 start_script: out/gcode/start_prusaMK3S.gcode #arquivo cabeçalho de inicio da impressora
 end_script: out/gcode/end_prusaMK3S.gcode #arquivo cabeçalho de fim da impressora
-infill_angle: [90] #angulo de preenchimento
+infill_angle: [180] #angulo de preenchimento
 infill_gap: 0.5 #prenchimento de lacuna
 offset: [150, 75, 0] #ponto zero da mesa
 external_adjust: 0.1 #ajuste dimensional, eh um offset que ele da nas laterais
@@ -25,7 +25,7 @@ retract_ratio: 0.9 #razao que determina a proporcao entre regiao flexivel e regi
 horizontal_gap_flex_infill: True #cria "vãos" (gaps) horizontais em formtos retangulares na zona flexível
 horizontal_num_gap: 1 #quantidade de gaps
 horizontal_perc_gap: 0.2 #porcentagem da área vazia em relação à área total da zona flexível
-orientation_gap: True #orientação de construção dos gaps: se os feixes da região flexivel estão no sentido horizontal, é False, se tiverem na vertical, é True
+orientation_gap: False #orientação de construção dos gaps: se os feixes da região flexivel estão no sentido horizontal, é False, se tiverem na vertical, é True
 best_path: True #ativar o algoritmo de melhor caminho (*Grafo do infill*)
 verbose: True
 threshold_walk_around: 1

@@ -677,6 +677,7 @@ def trace_minimum_cost_route(PointStart, PointEnd, ref_route):
     idxB = ref_route.index(list(PointEnd.coords)[0])
 
     # Generate the first possible route: pointStart -> PointEnd (direct)
+
     if (idxA == idxB):
         path_A = PointStart
 
@@ -687,24 +688,44 @@ def trace_minimum_cost_route(PointStart, PointEnd, ref_route):
     elif (idxA > idxB):
         path_A = ref_route[idxB:idxA+1][::-1]
 
+        ref_route = ref_route[::-1] # Invert ref_route for path_B calculations
+
 
     # Calculate the total dist for the path_A
     DistClockwise = sp.LineString(path_A).length
 
     # Calculate the other possible route: pointStart -> start_of_ref -> end_of_ref -> pointEnd
-    firstHalf = ref_route[:idxA+1]
-    secondHalf = ref_route[idxB:]
+    # Ensure that PointStart is behind PointEnd
+    if (ref_route.index(list(PointStart.coords)[0]) < ref_route.index(list(PointEnd.coords)[0])):
 
-    path_B = firstHalf[::-1] + secondHalf[::-1]
+        idxA = ref_route.index(list(PointStart.coords)[0])
+        idxB = ref_route.index(list(PointEnd.coords)[0])
 
-    # Calculate the total dist for the path_B
-    DistCounterclockwise = sp.LineString(path_B).length
+        firstHalf = ref_route[:idxA+1]
+        secondHalf = ref_route[idxB:]
 
-    # Choose the minimum cost
-    if (DistClockwise <= DistCounterclockwise):
-        return sp.LineString(path_A)
+        path_B = firstHalf[::-1] + secondHalf[::-1]
+
+        #print(ref_route)
+        #print(firstHalf)
+        #print(secondHalf)
+        #print()
+        #print()
+        # Calculate the total dist for the path_B
+        DistCounterclockwise = sp.LineString(path_B).length
+
+        #print(path_B)
+
+        #printf()
+
+        # Choose the minimum cost
+        if (DistClockwise <= DistCounterclockwise):
+            return sp.LineString(path_A)
+        else:
+            return sp.LineString(path_B)
     else:
-        return sp.LineString(path_B)
+        print("Trace_minimum_cost_route bug: PointStart is not behind PointEnd")
+        sys.exit(0)
 
 def walk_around(pair_points, sidewalk, external):
     """
