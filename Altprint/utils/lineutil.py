@@ -78,7 +78,6 @@ def split_by_regions(lines, regions, infill_region=None, layer=None, walk_around
             final, mask_sliced_region_walk_around = split_lines(final, region, infill_waa_mask, walk_around)
 
             layer.mask_sliced_region_walk_around = mask_sliced_region_walk_around
-
         # Return a MultiLineString composed of the final split geometries
         return MultiLineString(final)
 

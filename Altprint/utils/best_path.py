@@ -689,10 +689,17 @@ def trace_minimum_cost_route(PointStart, PointEnd, ref_route):
         path_A = ref_route[idxB:idxA+1][::-1]
 
         ref_route = ref_route[::-1] # Invert ref_route for path_B calculations
-
-
+    #TO DO#######################################
+    print(path_A)
     # Calculate the total dist for the path_A
-    DistClockwise = sp.LineString(path_A).length
+    if(idxA == idxB):
+        DistClockwise = 0
+        path_A = list(path_A.coords[0])
+        return sp.LineString(path_A.append(path_A[0]))
+    else:
+        DistClockwise = sp.LineString(path_A).length
+################################################################
+
 
     # Calculate the other possible route: pointStart -> start_of_ref -> end_of_ref -> pointEnd
     # Ensure that PointStart is behind PointEnd
