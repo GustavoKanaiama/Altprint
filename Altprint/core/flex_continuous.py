@@ -9,6 +9,7 @@ from Altprint.utils.lineutil import split_by_regions, retract
 from Altprint.utils.settingsparser import SettingsParser
 
 from Altprint.utils.horizontal_gaps import create_gaps
+from tqdm import tqdm
 import shapely as sp
 import sys
 
@@ -126,7 +127,8 @@ class FlexPrint(BasePrint):  # definição da classe responsável por implementa
         # print("skirt: ", self.last_loop)
 
         # loop que percorre todas as alturas na lista "heights". A função enumerate é usada para obter tanto o índice (i) quanto o valor (height) de cada altura.
-        for i, height in enumerate(self.heights):
+        i = 0
+        for height in tqdm(self.heights, desc="Generating layers"):
             # para cada altura, é criado um novo objeto "Layer", que recebe os parãmetros referentes ao perímetro fornecidos pelo arquivo yml, e atribuído a "layer" que é referente a cada camada
             layer = ContinuousLayer(self.sliced_planes.planes[height],
                                     self.process.perimeter_num,
@@ -202,21 +204,10 @@ class FlexPrint(BasePrint):  # definição da classe responsável por implementa
                                                                     layer.perimeter_paths,
                                                                     self.process.threshold_walk_around
                                                                     )
-                
-            # try to generate the infill region by using the internal perimeter
-            internal_perim_linestring = layer.perimeter_paths.geoms[-1]
-            merged_line = sp.line_merge(internal_perim_linestring)
+            
 
-            try:
-                # Create a Polygon from the merged, closed line
-                infill_region = sp.Polygon(merged_line.coords)
-            except:
-                print("The perimeter does not form a closed loop; cannot create the infill_region.")
-                sys.exit(0)
-                quit
-
-            # infill_region is only used by walk_around algorithm
-            infill_paths = split_by_regions(infill_paths, flex_regions, infill_region, layer, self.process.apply_walk_around) 
+ 
+            infill_paths = split_by_regions(infill_paths, flex_regions, layer, self.process.apply_walk_around) 
 
             # ------ FIM DO PRE-PROCESSAMENTO DO INFILL_PATH -------
             for index, path in enumerate(infill_paths.geoms, start=0):

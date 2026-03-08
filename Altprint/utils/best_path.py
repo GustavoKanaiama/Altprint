@@ -689,16 +689,15 @@ def trace_minimum_cost_route(PointStart, PointEnd, ref_route):
         path_A = ref_route[idxB:idxA+1][::-1]
 
         ref_route = ref_route[::-1] # Invert ref_route for path_B calculations
-    #TO DO#######################################
-    print(path_A)
+
+
     # Calculate the total dist for the path_A
     if(idxA == idxB):
         DistClockwise = 0
-        path_A = list(path_A.coords[0])
-        return sp.LineString(path_A.append(path_A[0]))
+        path_A = [(path_A.coords[0]), (path_A.coords[0])]
+        return sp.LineString(path_A)
     else:
         DistClockwise = sp.LineString(path_A).length
-################################################################
 
 
     # Calculate the other possible route: pointStart -> start_of_ref -> end_of_ref -> pointEnd
@@ -713,17 +712,8 @@ def trace_minimum_cost_route(PointStart, PointEnd, ref_route):
 
         path_B = firstHalf[::-1] + secondHalf[::-1]
 
-        #print(ref_route)
-        #print(firstHalf)
-        #print(secondHalf)
-        #print()
-        #print()
         # Calculate the total dist for the path_B
         DistCounterclockwise = sp.LineString(path_B).length
-
-        #print(path_B)
-
-        #printf()
 
         # Choose the minimum cost
         if (DistClockwise <= DistCounterclockwise):
@@ -765,29 +755,39 @@ def walk_around(pair_points, sidewalk, external):
 
     return walk_around_route
 
-def generate_walk_around(infill_path, sidewalk, mask, external=True):
+def generate_walk_around(infill_path, sidewalk, mask, ref_point, external=True):
     """
     This code generate the list of linestrings referred to walk_around. Also returns a mask_infill_w_waa list of 0's and 1's
+    mask_infill_w_waa: this mask is the infill+waa. each linestring is a refered by an element 1 or 0. 1: is a waa, 0: is not a waa. This is used to control the Raster's flow, extrude or not material. 
+    ref_point: the last of perimeter.
     """
 
     result_infill_path = []
     mask_infill_w_waa = [] # Create a mask_infill_w_waa -> list that shows which of the infill's linestring is a waa(walk_around_algorithm) displacement
 
-    for n in range(len(list(infill_path.geoms))-1):
 
-        result_infill_path.append(sp.LineString(infill_path.geoms[n]))
-        mask_infill_w_waa.append(0)
+    for n in range(len(list(infill_path.geoms))):
+
 
         # Apply the algorith (apply the connection between the two linestrings using the sidewalk)
         if mask[n] == 1:
-            pair_points = [(infill_path.geoms[n].coords[-1]), (infill_path.geoms[n+1].coords[0])]
+            
+            # If it's 'Ref'
+            if (n == 0):
+                pair_points = [ref_point, (infill_path.geoms[n].coords[0])]
+            else:
+                pair_points = [(infill_path.geoms[n-1].coords[-1]), (infill_path.geoms[n].coords[0])]
+            
             result_walk_around = walk_around(pair_points, sidewalk, external)
-
             result_infill_path.append(result_walk_around)
             mask_infill_w_waa.append(1)
 
-    result_infill_path.append(sp.LineString(infill_path.geoms[-1]))
-    mask_infill_w_waa.append(0)
+
+        result_infill_path.append(infill_path.geoms[n])
+        mask_infill_w_waa.append(0)
+
+    # print(result_infill_path)
+    # print(mask_infill_w_waa)
 
     return result_infill_path, mask_infill_w_waa
 
@@ -796,9 +796,12 @@ def make_pairs(path_node):
     """
     Generate displacement pairs using the node_path. return a list of tuples
     arrange by pairs [2'', 2', 1'', 1', 3'', 3'] -> [(2', 1''), (1', 3'')] OBS: each element is one displacement
+    OBS*: the first element is <Ref> (e.g. [Ref, 2'', 2', 1'', 1', 3'', 3'])
     """
-
     result_pairs = []
+    
+    # Append the perimeter->infill pair
+    result_pairs.append(("Ref", path_node[0]))
 
     for i in range(len(path_node)-1):
 

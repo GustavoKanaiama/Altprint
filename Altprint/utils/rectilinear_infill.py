@@ -371,7 +371,6 @@ class RectilinearInfill(InfillMethod):
         
         if best_path_flag:
             infill_paths = reorder_by_graph(infill_paths, path_nodes, node_point_map)
-
         else:
             # TODO: Create pairs node list not using graph
             pass
@@ -401,11 +400,10 @@ class RectilinearInfill(InfillMethod):
         # If there's somethign to walk_around -> generate the walk_around according to the mask (if there's at least one '1' in the list)
         # and apply to the layer's attribute
 
-        if 1 in mask_walk_around:
+        if (1 in mask_walk_around):
             
             layer.mask_walk_around = mask_walk_around
-            layer.continuous_infill_w_sidewalk, layer.mask_infill_with_waa = generate_walk_around(infill_paths, sidewalk, mask_walk_around)
-
+            layer.continuous_infill_w_sidewalk, layer.mask_infill_with_waa = generate_walk_around(infill_paths, sidewalk, mask_walk_around, ref_point)
 
         # ----- END OF Processing BestPath -----
 
