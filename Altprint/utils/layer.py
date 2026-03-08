@@ -128,7 +128,7 @@ class ContinuousLayer(Layer):
         self.continuous_perimeter_paths: List[LineString] = []
         self.continuous_infill_paths: List[LineString] = []
         self.flex_print_ref = flex_print_instance
-        self.mask_walk_around = [] # walk_around mask e.g. [0,1,0,0] apply walk_around to the second->third infill displacement
+        self.mask_walk_around = [] # walk_around mask e.g. [1,1,0,0] apply walk_around to the perimeter->first_infill_point and first->second infill displacement
         self.mask_infill_with_waa = [] # one more mask... This is like mask_walk_around, but with the infill in it. [0, 1, 1, 0, 0, 1] so in this case there's 6 linestrings on the infill(already with waa) and only the 1's is the walk_around displacement 
         self.mask_sliced_region_walk_around = [] # walk_around mask but for sliced regions
         self.continuous_infill_w_sidewalk = [] # walk_around linestring. Now the displacement will took place in the "sidewalk". This is the infill_path + sidewalk linestrings
@@ -180,6 +180,7 @@ class ContinuousLayer(Layer):
         perimeter_paths = MultiLineString(perimeter_paths)
 
         self.flex_print_ref.last_loop = perimeter_paths.geoms[-1]
+        self.continuous_perimeter_paths = perimeter_paths.geoms[-1]
         self.perimeter_paths = perimeter_paths
 
     def make_infill_border(self):
