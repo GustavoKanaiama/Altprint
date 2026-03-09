@@ -200,7 +200,7 @@ class FlexPrint(BasePrint):  # definição da classe responsável por implementa
             infill_paths = infill_method.generate_continuous_infill(layer,
                                                                     self.process.raster_gap,
                                                                     self.process.infill_angle[0],
-                                                                    self.process.best_path,
+                                                                    self.process.toggle_graph,
                                                                     layer.perimeter_paths,
                                                                     self.process.threshold_walk_around
                                                                     )

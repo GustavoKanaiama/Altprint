@@ -26,7 +26,8 @@ horizontal_gap_flex_infill: False #cria "vãos" (gaps) horizontais em formtos re
 horizontal_num_gap: 1 #quantidade de gaps
 horizontal_perc_gap: 0.2 #porcentagem da área vazia em relação à área total da zona flexível
 orientation_gap: False #orientação de construção dos gaps: se os feixes da região flexivel estão no sentido horizontal, é False, se tiverem na vertical, é True
-best_path: True #ativar o algoritmo de melhor caminho (*Grafo do infill*)
+best_path: True #ativar o algoritmo de melhor caminho
+toggle_graph: True # Activates graph solution for infill
 verbose: True
 threshold_walk_around: 1
 apply_walk_around: True
