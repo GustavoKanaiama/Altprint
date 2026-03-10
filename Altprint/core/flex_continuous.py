@@ -53,6 +53,7 @@ class FlexProcess():  # definição da classe responsável por controlar os par�
             "horizontal_perc_gap": 0.5,
             "orientation_gap": False,
             "best_path": True,
+            "toggle_graph": True,
             "verbose": True,
             "threshold_walk_around": 300,
             "apply_walk_around": False,

@@ -669,10 +669,12 @@ def trace_minimum_cost_route(PointStart, PointEnd, ref_route):
 
     ref_route: a linestring obj, will be a collection of points that will be used to construct the trajectory. 
     """
-    
+
     # Casting ref_rout Linestring obj -> list
     ref_route = list(ref_route.coords)
     
+    ref_route = remove_duplicates_keep_sequence(ref_route)
+
     idxA = ref_route.index(list(PointStart.coords)[0])
     idxB = ref_route.index(list(PointEnd.coords)[0])
 
@@ -680,6 +682,9 @@ def trace_minimum_cost_route(PointStart, PointEnd, ref_route):
 
     if (idxA == idxB):
         path_A = PointStart
+        DistClockwise = 0
+        path_A = [(path_A.coords[0]), (path_A.coords[0])]
+        return sp.LineString(path_A)
 
     elif (idxA < idxB):
         path_A = ref_route[idxA:idxB+1]
@@ -687,22 +692,16 @@ def trace_minimum_cost_route(PointStart, PointEnd, ref_route):
     # In this case we need to reverse the route because the indexA is "in front of" indexB (hence, creating a direct path A->B)
     elif (idxA > idxB):
         path_A = ref_route[idxB:idxA+1][::-1]
-
         ref_route = ref_route[::-1] # Invert ref_route for path_B calculations
 
-
-    # Calculate the total dist for the path_A
-    if(idxA == idxB):
-        DistClockwise = 0
-        path_A = [(path_A.coords[0]), (path_A.coords[0])]
-        return sp.LineString(path_A)
-    else:
-        DistClockwise = sp.LineString(path_A).length
-
+    DistClockwise = sp.LineString(path_A).length
 
     # Calculate the other possible route: pointStart -> start_of_ref -> end_of_ref -> pointEnd
     # Ensure that PointStart is behind PointEnd
-    if (ref_route.index(list(PointStart.coords)[0]) < ref_route.index(list(PointEnd.coords)[0])):
+    idxA = ref_route.index(list(PointStart.coords)[0])
+    idxB = ref_route.index(list(PointEnd.coords)[0])
+
+    if (idxA < idxB):
 
         idxA = ref_route.index(list(PointStart.coords)[0])
         idxB = ref_route.index(list(PointEnd.coords)[0])
@@ -721,7 +720,7 @@ def trace_minimum_cost_route(PointStart, PointEnd, ref_route):
         else:
             return sp.LineString(path_B)
     else:
-        print("Trace_minimum_cost_route bug: PointStart is not behind PointEnd")
+        print("\nTrace_minimum_cost_route bug: PointStart is not behind PointEnd")
         sys.exit(0)
 
 def walk_around(pair_points, sidewalk, external):
@@ -765,6 +764,10 @@ def generate_walk_around(infill_path, sidewalk, mask, ref_point, external=True):
     result_infill_path = []
     mask_infill_w_waa = [] # Create a mask_infill_w_waa -> list that shows which of the infill's linestring is a waa(walk_around_algorithm) displacement
 
+    # Check the length of the "mask" and of the infill
+    if (len(mask) != len(list(infill_path.geoms))):
+        print("Error: The length of the mask does not match the length of the infill_path.")
+        sys.exit(0)
 
     for n in range(len(list(infill_path.geoms))):
 
@@ -796,12 +799,13 @@ def make_pairs(path_node):
     """
     Generate displacement pairs using the node_path. return a list of tuples
     arrange by pairs [2'', 2', 1'', 1', 3'', 3'] -> [(2', 1''), (1', 3'')] OBS: each element is one displacement
-    OBS*: the first element is <Ref> (e.g. [Ref, 2'', 2', 1'', 1', 3'', 3'])
+    OBS*: the first element is <Ref> (e.g. [Ref, 2'', 2', 1'', 1', 3'', 3']) if it's above the threshold
     """
     result_pairs = []
     
     # Append the perimeter->infill pair
     result_pairs.append(("Ref", path_node[0]))
+
 
     for i in range(len(path_node)-1):
 
@@ -812,3 +816,13 @@ def make_pairs(path_node):
 
     return result_pairs
 
+def remove_duplicates_keep_sequence(points):
+    seen = set()
+    result = []
+
+    for p in points:
+        if p not in seen:
+            seen.add(p)
+            result.append(p)
+
+    return result

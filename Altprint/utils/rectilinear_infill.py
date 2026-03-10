@@ -337,10 +337,14 @@ class RectilinearInfill(InfillMethod):
         # Solve the Graph
         if toggle_graph:
             cost, path_nodes = min_hamiltonian_path(G, source="Ref")
+            path_nodes.pop(0)
         else:
             path_nodes = [x for x in node_point_map.keys()]
             path_nodes.pop()
-                
+        
+        # print()
+        # print(list(multilinestring_infill.geoms))
+ 
 
         for k in multilinestring_infill.geoms:
             raw_list_points = RawList_Points(k, makeTuple=True)
@@ -353,18 +357,26 @@ class RectilinearInfill(InfillMethod):
 
         multilinestring_bufferInfill = MultiLineString(buffer_InfillPaths)
 
-        infill_paths = order_list(multilinestring_bufferInfill, best_path, best_directions)
+        #infill_paths = order_list(multilinestring_bufferInfill, best_path, best_directions)
+        infill_paths = multilinestring_infill
 
-        
+        # print()
+        # print(list(infill_paths.geoms))
+        # printf()
+
+        pair_nodes_path = make_pairs(path_nodes)
+
         # Re-ordering using Graph info
         # TODO: embedded "reoder_by_graph" function in "order_list" and delete the rotateFlex from search paramaeters (clen up some code)
         # TODO: alocate the first two infills trajectories. then compare the first point of "Ref" to (maybe) use one of the pre-calculated infill paths.
         
+        # TODO: Fix the best_path funciton in order to correct this duplicate bug
+        infill_paths = sp.MultiLineString(remove_duplicates_keep_sequence(list(infill_paths.geoms)))
+        
+
         if toggle_graph:
             infill_paths = reorder_by_graph(infill_paths, path_nodes, node_point_map)
 
-
-        pair_nodes_path = make_pairs(path_nodes)
 
         # Mask of walk_around. [0, 0, 0, 1, 0] for each "1" means to apply the walk_around in the corresponded pair_node
         # (e. g. [(1'', 2'), (2'', 3''), (3', 1')] and the mask -> [0, 1, 0] measn to apply only to (2', 3'') displacement)
@@ -393,8 +405,16 @@ class RectilinearInfill(InfillMethod):
             
             layer.mask_walk_around = mask_walk_around
             layer.continuous_infill_w_sidewalk, layer.mask_infill_with_waa = generate_walk_around(infill_paths, sidewalk, mask_walk_around, ref_point)
+            self.flex_print_ref.last_loop = layer.continuous_infill_w_sidewalk[-1]
+            print()
+            print(layer.continuous_infill_w_sidewalk)
+            print(layer.mask_infill_with_waa)
+            print()
+
+            return sp.MultiLineString(layer.continuous_infill_w_sidewalk)
 
         # ----- END OF Processing BestPath -----
+        else:
+            self.flex_print_ref.last_loop = infill_paths.geoms[-1]
 
-        self.flex_print_ref.last_loop = infill_paths.geoms[-1]
-        return infill_paths
+            return infill_paths
